@@ -8,18 +8,22 @@ from google.genai import types
 st.set_page_config(page_title="AI Web Agent", page_icon="🌐", layout="wide")
 
 st.title("🌐 Autonomous AI Internet Agent")
-st.caption("Powered by Gemini with real-time web search and full-page reading capabilities.")
+st.caption("Powered by Gemini with real-time web search and reading capabilities.")
 
-# Sidebar Settings
+# Sidebar
 with st.sidebar:
     st.header("Configuration")
     api_key = st.text_input("Gemini API Key", type="password")
     model_choice = st.selectbox("Select Model", ["gemini-2.5-flash", "gemini-1.5-pro"])
     st.markdown("[Get a free Gemini API Key](https://aistudio.google.com/)")
 
-# Tool Functions
+# Tool 1: Web Search
 def search_web(query: str) -> str:
-    """Searches DuckDuckGo and returns top results."""
+    """Searches DuckDuckGo and returns the top 5 live results with snippets and links.
+    
+    Args:
+        query: The search query string to look up on the internet.
+    """
     try:
         results = DDGS().text(query, max_results=5)
         if not results:
@@ -31,24 +35,28 @@ def search_web(query: str) -> str:
     except Exception as e:
         return f"Search error: {str(e)}"
 
+# Tool 2: Web Scraper
 def read_webpage(url: str) -> str:
-    """Fetches and extracts clean text from any URL."""
+    """Fetches and extracts full text content from any website URL.
+    
+    Args:
+        url: The exact webpage URL to read.
+    """
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         resp = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(resp.text, "html.parser")
         
-        # Remove script and style elements
         for element in soup(["script", "style", "nav", "footer"]):
             element.decompose()
             
         text = " ".join(soup.stripped_strings)
-        return text[:5000] if text else "Page is empty or protected."
+        return text[:8000] if text else "Page is empty or protected."
     except Exception as e:
         return f"Failed to fetch webpage: {str(e)}"
 
-# Agent Execution
-user_prompt = st.chat_input("Ask your agent to research anything on the web...")
+# Chat interface
+user_prompt = st.chat_input("Ask your agent to research anything...")
 
 if user_prompt:
     if not api_key:
@@ -56,66 +64,20 @@ if user_prompt:
     else:
         st.chat_message("user").write(user_prompt)
         
-        client = genai.Client(api_key=api_key)
-        
-        tools_def = [
-            types.Tool(function_declarations=[
-                types.FunctionDeclaration(
-                    name="search_web",
-                    description="Search the internet using DuckDuckGo for live info, facts, and links.",
-                    parameters=types.Schema(
-                        type="OBJECT",
-                        properties={"query": types.Schema(type="STRING")},
-                        required=["query"]
-                    )
-                ),
-                types.FunctionDeclaration(
-                    name="read_webpage",
-                    description="Read the complete text content of a specific web URL.",
-                    parameters=types.Schema(
-                        type="OBJECT",
-                        properties={"url": types.Schema(type="STRING")},
-                        required=["url"]
-                    )
-                )
-            ])
-        ]
-        
         with st.chat_message("assistant"):
-            status = st.status("Agent is working...", expanded=True)
-            chat = client.chats.create(
-                model=model_choice,
-                config=types.GenerateContentConfig(
-                    tools=tools_def,
-                    system_instruction="You are an autonomous internet research agent. Use the search_web and read_webpage tools iteratively to answer user tasks thoroughly."
-                )
-            )
-            
-            response = chat.send_message(user_prompt)
-            
-            # Autonomous execution loop
-            steps = 0
-            while response.function_calls and steps < 6:
-                steps += 1
-                call = response.function_calls[0]
-                tool_name = call.name
-                args = call.args
-                
-                status.write(f"🔧 **Executing Tool:** `{tool_name}` with arguments: `{args}`")
-                
-                if tool_name == "search_web":
-                    tool_output = search_web(args.get("query"))
-                elif tool_name == "read_webpage":
-                    tool_output = read_webpage(args.get("url"))
-                else:
-                    tool_output = "Unknown tool"
-                
-                response = chat.send_message(
-                    types.Part.from_function_response(
-                        name=tool_name,
-                        response={"result": tool_output}
+            with st.spinner("Agent is researching the live web..."):
+                try:
+                    client = genai.Client(api_key=api_key)
+                    
+                    # Passes Python functions directly for automatic execution
+                    response = client.models.generate_content(
+                        model=model_choice,
+                        contents=user_prompt,
+                        config=types.GenerateContentConfig(
+                            tools=[search_web, read_webpage],
+                            system_instruction="You are an autonomous internet research agent. Always use the search_web or read_webpage tools to look up real-time information before answering."
+                        )
                     )
-                )
-            
-            status.update(label="Task Complete!", state="complete", expanded=False)
-            st.write(response.text)
+                    st.write(response.text)
+                except Exception as err:
+                    st.error(f"Error: {str(err)}")
