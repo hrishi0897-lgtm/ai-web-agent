@@ -10,11 +10,14 @@ st.set_page_config(page_title="AI Web Agent", page_icon="🌐", layout="wide")
 st.title("🌐 Autonomous AI Internet Agent")
 st.caption("Powered by Gemini with real-time web search and reading capabilities.")
 
-# Sidebar
+# Sidebar Settings
 with st.sidebar:
     st.header("Configuration")
     api_key = st.text_input("Gemini API Key", type="password")
-    model_choice = st.selectbox("Select Model", ["gemini-2.5-flash", "gemini-1.5-pro"])
+    model_choice = st.selectbox(
+        "Select Model", 
+        ["gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.1-pro-preview"]
+    )
     st.markdown("[Get a free Gemini API Key](https://aistudio.google.com/)")
 
 # Tool 1: Web Search
@@ -69,7 +72,6 @@ if user_prompt:
                 try:
                     client = genai.Client(api_key=api_key)
                     
-                    # Passes Python functions directly for automatic execution
                     response = client.models.generate_content(
                         model=model_choice,
                         contents=user_prompt,
